@@ -1,3 +1,4 @@
+
 package com.sarkhati.android;
 
 import android.accessibilityservice.AccessibilityService;
@@ -36,10 +37,10 @@ public class ClickAccessibilityService extends AccessibilityService {
         return instance != null;
     }
 
-    public static boolean performTestClick(
+    public static boolean performClick(
             float x,
             float y,
-            AccessibilityService.GestureResultCallback callback
+            GestureResultCallback callback
     ) {
         if (instance == null || Build.VERSION.SDK_INT < 24) {
             return false;
@@ -56,10 +57,6 @@ public class ClickAccessibilityService extends AccessibilityService {
                         .addStroke(stroke)
                         .build();
 
-        return instance.dispatchGesture(
-                gesture,
-                callback,
-                null
-        );
+        return instance.dispatchGesture(gesture, callback, null);
     }
 }
