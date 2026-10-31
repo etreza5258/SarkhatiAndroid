@@ -4,8 +4,6 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.accessibility.AccessibilityEvent;
 
 public class ClickAccessibilityService extends AccessibilityService {
@@ -20,7 +18,7 @@ public class ClickAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        // رویدادهای صفحه در این نسخه پردازش نمی‌شوند.
+        // رویدادهای صفحه پردازش نمی‌شوند.
     }
 
     @Override
@@ -38,9 +36,13 @@ public class ClickAccessibilityService extends AccessibilityService {
         return instance != null;
     }
 
-    public static void performTestClick(float x, float y) {
+    public static boolean performTestClick(
+            float x,
+            float y,
+            AccessibilityService.GestureResultCallback callback
+    ) {
         if (instance == null || Build.VERSION.SDK_INT < 24) {
-            return;
+            return false;
         }
 
         Path path = new Path();
@@ -54,6 +56,10 @@ public class ClickAccessibilityService extends AccessibilityService {
                         .addStroke(stroke)
                         .build();
 
-        instance.dispatchGesture(gesture, null, null);
+        return instance.dispatchGesture(
+                gesture,
+                callback,
+                null
+        );
     }
 }
