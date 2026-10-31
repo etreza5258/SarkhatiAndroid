@@ -28,7 +28,6 @@ public class MainActivity extends Activity {
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private Thread worker;
 
     private final Runnable clockUpdater = new Runnable() {
         @Override
@@ -79,7 +78,6 @@ public class MainActivity extends Activity {
         setContentView(layout);
 
         syncButton.setOnClickListener(v -> syncHttps());
-
         startButton.setOnClickListener(v -> startSchedule());
 
         stopButton.setOnClickListener(v -> {
@@ -101,7 +99,7 @@ public class MainActivity extends Activity {
     private long getHttpsTime() throws Exception {
         URL url = new URL("https://www.google.com/generate_204");
         HttpURLConnection connection =
-            (HttpURLConnection) url.openConnection();
+                (HttpURLConnection) url.openConnection();
 
         connection.setRequestMethod("HEAD");
         connection.setConnectTimeout(5000);
@@ -124,7 +122,6 @@ public class MainActivity extends Activity {
 
     private void syncHttps() {
         status.setText("در حال دریافت زمان از اینترنت...");
-
         syncButton.setEnabled(false);
 
         new Thread(() -> {
@@ -146,22 +143,26 @@ public class MainActivity extends Activity {
                     }
                 }
 
-                ntpOffset = bestOffset;
-                anchorNtp = System.currentTimeMillis() + bestOffset;
+                final long finalOffset = bestOffset;
+                final long finalBestDelay = bestDelay;
+
+                ntpOffset = finalOffset;
+                anchorNtp = System.currentTimeMillis() + finalOffset;
                 anchorElapsed = SystemClock.elapsedRealtime();
                 synced = true;
 
                 runOnUiThread(() -> {
                     syncButton.setEnabled(true);
                     status.setText(
-                        "همگام‌سازی انجام شد.\n" +
-                        "اختلاف تخمینی: " + ntpOffset + " میلی‌ثانیه\n" +
-                        "کمترین تأخیر: " + bestDelay + " میلی‌ثانیه"
+                            "همگام‌سازی انجام شد.\n" +
+                            "اختلاف تخمینی: " + finalOffset + " میلی‌ثانیه\n" +
+                            "کمترین تأخیر: " + finalBestDelay + " میلی‌ثانیه"
                     );
                 });
 
             } catch (Exception e) {
                 synced = false;
+
                 runOnUiThread(() -> {
                     syncButton.setEnabled(true);
                     status.setText("خطای دریافت زمان: " + e.getMessage());
@@ -172,23 +173,23 @@ public class MainActivity extends Activity {
 
     private long getNtpNow() {
         return anchorNtp +
-            (SystemClock.elapsedRealtime() - anchorElapsed);
+                (SystemClock.elapsedRealtime() - anchorElapsed);
     }
 
     private void updateClock() {
         SimpleDateFormat format =
-            new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
+                new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
 
         String phoneTime =
-            format.format(new Date(System.currentTimeMillis()));
+                format.format(new Date(System.currentTimeMillis()));
 
         String internetTime = synced
-            ? format.format(new Date(getNtpNow()))
-            : "همگام‌سازی نشده";
+                ? format.format(new Date(getNtpNow()))
+                : "همگام‌سازی نشده";
 
         clockText.setText(
-            "ساعت گوشی: " + phoneTime +
-            "\nساعت اینترنت: " + internetTime
+                "ساعت گوشی: " + phoneTime +
+                "\nساعت اینترنت: " + internetTime
         );
     }
 
@@ -200,7 +201,7 @@ public class MainActivity extends Activity {
 
         try {
             String[] parts =
-                timeInput.getText().toString().trim().split("[:.]");
+                    timeInput.getText().toString().trim().split("[:.]");
 
             if (parts.length != 4) {
                 throw new Exception("فرمت ساعت باید HH:mm:ss.SSS باشد.");
@@ -212,15 +213,15 @@ public class MainActivity extends Activity {
             int milli = Integer.parseInt(parts[3]);
 
             int count = Integer.parseInt(
-                countInput.getText().toString().trim()
+                    countInput.getText().toString().trim()
             );
 
             long interval = Long.parseLong(
-                intervalInput.getText().toString().trim()
+                    intervalInput.getText().toString().trim()
             );
 
             if (hour > 23 || minute > 59 || second > 59 ||
-                milli > 999 || count < 1 || interval < 1) {
+                    milli > 999 || count < 1 || interval < 1) {
                 throw new Exception("مقادیر واردشده معتبر نیستند.");
             }
 
@@ -238,15 +239,15 @@ public class MainActivity extends Activity {
                 target = calendar.getTimeInMillis();
             }
 
-            long targetElapsed = anchorElapsed +
-                (target - anchorNtp);
+            final long targetElapsed =
+                    anchorElapsed + (target - anchorNtp);
 
             running.set(false);
             running.set(true);
 
-            worker = new Thread(() -> {
+            new Thread(() -> {
                 while (running.get() &&
-                    SystemClock.elapsedRealtime() < targetElapsed) {
+                        SystemClock.elapsedRealtime() < targetElapsed) {
                     SystemClock.sleep(1);
                 }
 
@@ -256,9 +257,9 @@ public class MainActivity extends Activity {
                     final int number = i;
 
                     runOnUiThread(() ->
-                        status.setText(
-                            "اجرای آزمایشی " + number + " از " + count
-                        )
+                            status.setText(
+                                    "اجرای آزمایشی " + number + " از " + count
+                            )
                     );
 
                     if (i < count) {
@@ -269,11 +270,10 @@ public class MainActivity extends Activity {
                 running.set(false);
 
                 runOnUiThread(() ->
-                    status.setText("زمان‌بندی آزمایشی تمام شد.")
+                        status.setText("زمان‌بندی آزمایشی تمام شد.")
                 );
-            });
+            }).start();
 
-            worker.start();
             status.setText("زمان‌بندی ثبت شد.");
 
         } catch (Exception e) {
