@@ -1,4 +1,3 @@
-
 package com.sarkhati.android;
 
 import android.app.Activity;
@@ -6,11 +5,13 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.Settings;
 import android.widget.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -19,7 +20,7 @@ public class MainActivity extends Activity {
 
     private TextView clockText, status;
     private EditText timeInput, countInput, intervalInput;
-    private Button syncButton, startButton, stopButton;
+    private Button syncButton;
 
     private volatile long ntpOffset = 0;
     private volatile boolean synced = false;
@@ -46,7 +47,7 @@ public class MainActivity extends Activity {
         layout.setPadding(25, 25, 25, 25);
 
         TextView title = new TextView(this);
-        title.setText("زمان‌بندی سرخطی - ساعت HTTPS");
+        title.setText("زمان‌بندی سرخطی");
         title.setTextSize(22);
         layout.addView(title);
 
@@ -58,26 +59,42 @@ public class MainActivity extends Activity {
         syncButton.setText("همگام‌سازی ساعت اینترنت");
         layout.addView(syncButton);
 
+        Button showMarker = new Button(this);
+        showMarker.setText("نمایش نشانگر شناور");
+        layout.addView(showMarker);
+
+        Button hideMarker = new Button(this);
+        hideMarker.setText("مخفی‌کردن نشانگر");
+        layout.addView(hideMarker);
+
         timeInput = createField(layout, "ساعت اجرا مثال 08:44:59.900");
         countInput = createField(layout, "تعداد اجرا مثال 10");
         intervalInput = createField(layout, "فاصله میلی‌ثانیه مثال 100");
 
-        startButton = new Button(this);
+        Button startButton = new Button(this);
         startButton.setText("شروع زمان‌بندی آزمایشی");
         layout.addView(startButton);
 
-        stopButton = new Button(this);
+        Button stopButton = new Button(this);
         stopButton.setText("توقف");
         layout.addView(stopButton);
 
         status = new TextView(this);
-        status.setText("وضعیت: ابتدا ساعت اینترنت را همگام کنید.");
+        status.setText("وضعیت: آماده");
         status.setTextSize(16);
         layout.addView(status);
 
         setContentView(layout);
 
         syncButton.setOnClickListener(v -> syncHttps());
+
+        showMarker.setOnClickListener(v -> showFloatingMarker());
+
+        hideMarker.setOnClickListener(v -> {
+            stopService(new Intent(this, OverlayService.class));
+            status.setText("نشانگر مخفی شد.");
+        });
+
         startButton.setOnClickListener(v -> startSchedule());
 
         stopButton.setOnClickListener(v -> {
@@ -96,8 +113,26 @@ public class MainActivity extends Activity {
         return field;
     }
 
+    private void showFloatingMarker() {
+        if (!Settings.canDrawOverlays(this)) {
+            Intent intent = new Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName())
+            );
+            startActivity(intent);
+            status.setText(
+                    "مجوز نمایش روی برنامه‌های دیگر را فعال کن."
+            );
+            return;
+        }
+
+        startService(new Intent(this, OverlayService.class));
+        status.setText("نشانگر شناور نمایش داده شد.");
+    }
+
     private long getHttpsTime() throws Exception {
         URL url = new URL("https://www.google.com/generate_204");
+
         HttpURLConnection connection =
                 (HttpURLConnection) url.openConnection();
 
@@ -121,7 +156,7 @@ public class MainActivity extends Activity {
     }
 
     private void syncHttps() {
-        status.setText("در حال دریافت زمان از اینترنت...");
+        status.setText("در حال دریافت زمان اینترنت...");
         syncButton.setEnabled(false);
 
         new Thread(() -> {
@@ -144,7 +179,7 @@ public class MainActivity extends Activity {
                 }
 
                 final long finalOffset = bestOffset;
-                final long finalBestDelay = bestDelay;
+                final long finalDelay = bestDelay;
 
                 ntpOffset = finalOffset;
                 anchorNtp = System.currentTimeMillis() + finalOffset;
@@ -156,7 +191,7 @@ public class MainActivity extends Activity {
                     status.setText(
                             "همگام‌سازی انجام شد.\n" +
                             "اختلاف تخمینی: " + finalOffset + " میلی‌ثانیه\n" +
-                            "کمترین تأخیر: " + finalBestDelay + " میلی‌ثانیه"
+                            "کمترین تأخیر: " + finalDelay + " میلی‌ثانیه"
                     );
                 });
 
@@ -225,17 +260,19 @@ public class MainActivity extends Activity {
                 throw new Exception("مقادیر واردشده معتبر نیستند.");
             }
 
-            Calendar calendar = Calendar.getInstance();
+            java.util.Calendar calendar =
+                    java.util.Calendar.getInstance();
+
             calendar.setTimeInMillis(getNtpNow());
-            calendar.set(Calendar.HOUR_OF_DAY, hour);
-            calendar.set(Calendar.MINUTE, minute);
-            calendar.set(Calendar.SECOND, second);
-            calendar.set(Calendar.MILLISECOND, milli);
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, hour);
+            calendar.set(java.util.Calendar.MINUTE, minute);
+            calendar.set(java.util.Calendar.SECOND, second);
+            calendar.set(java.util.Calendar.MILLISECOND, milli);
 
             long target = calendar.getTimeInMillis();
 
             if (target <= getNtpNow()) {
-                calendar.add(Calendar.DAY_OF_MONTH, 1);
+                calendar.add(java.util.Calendar.DAY_OF_MONTH, 1);
                 target = calendar.getTimeInMillis();
             }
 
@@ -274,7 +311,7 @@ public class MainActivity extends Activity {
                 );
             }).start();
 
-            status.setText("زمان‌بندی ثبت شد.");
+            status.setText("زمان‌بندی آزمایشی ثبت شد.");
 
         } catch (Exception e) {
             status.setText("خطا: " + e.getMessage());
