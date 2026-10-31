@@ -63,25 +63,44 @@ public class MainActivity extends Activity {
     private final Runnable countdownUpdater = new Runnable() {
         @Override
         public void run() {
+
             if (!running.get()) {
                 return;
             }
 
-            long remaining =
-                    targetElapsed - SystemClock.elapsedRealtime();
+            long remaining = Math.max(
+                    0,
+                    targetElapsed - SystemClock.elapsedRealtime()
+            );
+
+            countdownText.setText(
+                    "زمان باقی‌مانده: " + formatTime(remaining)
+            );
 
             if (remaining > 0) {
-                countdownText.setText(
-                        "زمان باقی‌مانده: " +
-                        remaining + " میلی‌ثانیه"
-                );
+                handler.postDelayed(this, 20);
             } else {
                 countdownText.setText("زمان شروع فرا رسید.");
             }
-
-            handler.postDelayed(this, 20);
         }
     };
+
+    private String formatTime(long millis) {
+
+        long hours = millis / 3600000;
+        long minutes = (millis / 60000) % 60;
+        long seconds = (millis / 1000) % 60;
+        long milliseconds = millis % 1000;
+
+        return String.format(
+                Locale.US,
+                "%02d : %02d : %02d : %03d",
+                hours,
+                minutes,
+                seconds,
+                milliseconds
+        );
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -141,7 +160,7 @@ public class MainActivity extends Activity {
         layout.addView(countdownText);
 
         Button startButton = new Button(this);
-        startButton.setText("شروع زمان‌بندی آزمایشی");
+        startButton.setText("شروع زمان‌بندی");
         layout.addView(startButton);
 
         Button stopButton = new Button(this);
@@ -215,13 +234,12 @@ public class MainActivity extends Activity {
     }
 
     private void addLog(String message) {
+
         String entry = currentTime() + " - " + message;
 
         String old = logs.getString("entries", "");
-
         String updated = entry + "\n" + old;
 
-        // جلوگیری از بزرگ‌شدن بیش از حد گزارش
         if (updated.length() > 20000) {
             updated = updated.substring(0, 20000);
         }
@@ -232,6 +250,7 @@ public class MainActivity extends Activity {
     }
 
     private void refreshLogs() {
+
         if (logText == null) {
             return;
         }
@@ -245,7 +264,9 @@ public class MainActivity extends Activity {
     }
 
     private void showFloatingMarker() {
+
         if (!Settings.canDrawOverlays(this)) {
+
             Intent intent = new Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName())
@@ -256,6 +277,7 @@ public class MainActivity extends Activity {
             status.setText(
                     "مجوز نمایش روی برنامه‌های دیگر را فعال کن."
             );
+
             return;
         }
 
@@ -266,6 +288,7 @@ public class MainActivity extends Activity {
     }
 
     private long getHttpsTime() throws Exception {
+
         URL url = new URL(
                 "https://www.google.com/generate_204"
         );
@@ -279,6 +302,7 @@ public class MainActivity extends Activity {
         connection.setUseCaches(false);
 
         try {
+
             connection.connect();
 
             long time = connection.getDate();
@@ -295,15 +319,19 @@ public class MainActivity extends Activity {
     }
 
     private void syncHttps() {
+
         status.setText("در حال دریافت زمان اینترنت...");
         syncButton.setEnabled(false);
 
         new Thread(() -> {
+
             try {
+
                 long bestOffset = 0;
                 long bestDelay = Long.MAX_VALUE;
 
                 for (int i = 0; i < 5; i++) {
+
                     long t1 = System.currentTimeMillis();
 
                     long serverTime = getHttpsTime();
@@ -332,6 +360,7 @@ public class MainActivity extends Activity {
                 synced = true;
 
                 runOnUiThread(() -> {
+
                     syncButton.setEnabled(true);
 
                     status.setText(
@@ -346,9 +375,11 @@ public class MainActivity extends Activity {
                 });
 
             } catch (Exception e) {
+
                 synced = false;
 
                 runOnUiThread(() -> {
+
                     syncButton.setEnabled(true);
 
                     status.setText(
@@ -359,15 +390,18 @@ public class MainActivity extends Activity {
                     addLog("خطا در همگام‌سازی ساعت.");
                 });
             }
+
         }).start();
     }
 
     private long getNtpNow() {
+
         return anchorNtp +
                 (SystemClock.elapsedRealtime() - anchorElapsed);
     }
 
     private void updateClock() {
+
         SimpleDateFormat format =
                 new SimpleDateFormat(
                         "HH:mm:ss.SSS",
@@ -389,8 +423,12 @@ public class MainActivity extends Activity {
     }
 
     private void stopSchedule() {
+
         if (running.getAndSet(false)) {
+
             handler.removeCallbacks(countdownUpdater);
+
+            OverlayService.stopCountdown(this);
 
             if (scheduleThread != null) {
                 scheduleThread.interrupt();
@@ -400,12 +438,15 @@ public class MainActivity extends Activity {
             status.setText("زمان‌بندی متوقف شد.");
 
             addLog("زمان‌بندی توسط کاربر متوقف شد.");
+
         } else {
+
             status.setText("زمان‌بندی فعالی وجود ندارد.");
         }
     }
 
     private void startSchedule() {
+
         if (!synced) {
             status.setText(
                     "ابتدا ساعت اینترنت را همگام کنید."
@@ -421,6 +462,7 @@ public class MainActivity extends Activity {
         }
 
         try {
+
             String[] parts = timeInput
                     .getText()
                     .toString()
@@ -477,21 +519,45 @@ public class MainActivity extends Activity {
             targetElapsed =
                     anchorElapsed + (target - anchorNtp);
 
+            long remaining =
+                    targetElapsed - SystemClock.elapsedRealtime();
+
+            if (!Settings.canDrawOverlays(this)) {
+                throw new Exception(
+                        "ابتدا مجوز نمایش شناور را فعال کن."
+                );
+            }
+
             running.set(true);
+
+            Intent serviceIntent =
+                    new Intent(this, OverlayService.class);
+
+            serviceIntent.setAction("START_COUNTDOWN");
+            serviceIntent.putExtra("remaining", remaining);
+
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
 
             addLog(
                     "زمان‌بندی ثبت شد؛ تعداد اجرا: " +
                     totalCount +
-                    "؛ فاصله: " + interval + " میلی‌ثانیه"
+                    "؛ فاصله: " +
+                    interval + " میلی‌ثانیه"
             );
 
-            status.setText("زمان‌بندی آزمایشی ثبت شد.");
+            status.setText("زمان‌بندی ثبت شد.");
 
             handler.removeCallbacks(countdownUpdater);
             handler.post(countdownUpdater);
 
             scheduleThread = new Thread(() -> {
+
                 try {
+
                     while (running.get() &&
                             SystemClock.elapsedRealtime() < targetElapsed) {
 
@@ -511,6 +577,7 @@ public class MainActivity extends Activity {
                         final int number = i;
 
                         runOnUiThread(() -> {
+
                             status.setText(
                                     "اجرای آزمایشی " +
                                     number + " از " + totalCount
@@ -527,11 +594,17 @@ public class MainActivity extends Activity {
                     }
 
                     if (running.get()) {
+
                         running.set(false);
 
                         runOnUiThread(() -> {
+
                             handler.removeCallbacks(
                                     countdownUpdater
+                            );
+
+                            OverlayService.stopCountdown(
+                                    MainActivity.this
                             );
 
                             countdownText.setText(
@@ -539,26 +612,33 @@ public class MainActivity extends Activity {
                             );
 
                             status.setText(
-                                    "زمان‌بندی آزمایشی تمام شد."
+                                    "زمان‌بندی تمام شد."
                             );
 
                             addLog(
-                                    "پایان زمان‌بندی آزمایشی."
+                                    "پایان زمان‌بندی."
                             );
                         });
                     }
 
                 } catch (Exception e) {
+
                     if (running.get()) {
+
                         running.set(false);
 
                         runOnUiThread(() -> {
+
+                            OverlayService.stopCountdown(
+                                    MainActivity.this
+                            );
+
                             status.setText(
                                     "خطا در زمان‌بندی: " +
                                     e.getMessage()
                             );
 
-                            addLog("خطا در زمان‌بندی آزمایشی.");
+                            addLog("خطا در زمان‌بندی.");
                         });
                     }
                 }
@@ -567,18 +647,21 @@ public class MainActivity extends Activity {
             scheduleThread.start();
 
         } catch (Exception e) {
+
+            running.set(false);
+
             status.setText("خطا: " + e.getMessage());
         }
     }
 
     @Override
     protected void onDestroy() {
-        running.set(false);
 
         handler.removeCallbacks(clockUpdater);
         handler.removeCallbacks(countdownUpdater);
 
-        if (scheduleThread != null) {
+        if (scheduleThread != null &&
+                !running.get()) {
             scheduleThread.interrupt();
         }
 
