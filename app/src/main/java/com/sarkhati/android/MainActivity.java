@@ -324,4 +324,4 @@ public class MainActivity extends Activity {
         handler.removeCallbacks(clockUpdater);
         super.onDestroy();
     }
-} 
+}
