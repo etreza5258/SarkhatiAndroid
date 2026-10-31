@@ -6,29 +6,51 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.provider.Settings;
-import android.widget.*;
+import android.view.Gravity;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends Activity {
 
-    private TextView clockText, status;
-    private EditText timeInput, countInput, intervalInput;
+    private TextView clockText;
+    private TextView status;
+    private TextView countdownText;
+    private TextView logText;
+
+    private EditText timeInput;
+    private EditText countInput;
+    private EditText intervalInput;
+
     private Button syncButton;
 
-    private volatile long ntpOffset = 0;
     private volatile boolean synced = false;
     private volatile long anchorNtp;
     private volatile long anchorElapsed;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Handler handler = new Handler(Looper.getMainLooper());
+
+    private SharedPreferences logs;
+
+    private long targetElapsed;
+    private int totalCount;
+    private long interval;
+
+    private Thread scheduleThread;
 
     private final Runnable clockUpdater = new Runnable() {
         @Override
@@ -38,9 +60,37 @@ public class MainActivity extends Activity {
         }
     };
 
+    private final Runnable countdownUpdater = new Runnable() {
+        @Override
+        public void run() {
+            if (!running.get()) {
+                return;
+            }
+
+            long remaining =
+                    targetElapsed - SystemClock.elapsedRealtime();
+
+            if (remaining > 0) {
+                countdownText.setText(
+                        "زمان باقی‌مانده: " +
+                        remaining + " میلی‌ثانیه"
+                );
+            } else {
+                countdownText.setText("زمان شروع فرا رسید.");
+            }
+
+            handler.postDelayed(this, 20);
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        logs = getSharedPreferences(
+                "execution_logs",
+                MODE_PRIVATE
+        );
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -48,11 +98,13 @@ public class MainActivity extends Activity {
 
         TextView title = new TextView(this);
         title.setText("زمان‌بندی سرخطی");
-        title.setTextSize(22);
+        title.setTextSize(24);
+        title.setGravity(Gravity.CENTER);
         layout.addView(title);
 
         clockText = new TextView(this);
-        clockText.setTextSize(18);
+        clockText.setTextSize(17);
+        clockText.setPadding(0, 15, 0, 15);
         layout.addView(clockText);
 
         syncButton = new Button(this);
@@ -67,9 +119,26 @@ public class MainActivity extends Activity {
         hideMarker.setText("مخفی‌کردن نشانگر");
         layout.addView(hideMarker);
 
-        timeInput = createField(layout, "ساعت اجرا مثال 08:44:59.900");
-        countInput = createField(layout, "تعداد اجرا مثال 10");
-        intervalInput = createField(layout, "فاصله میلی‌ثانیه مثال 100");
+        timeInput = createField(
+                layout,
+                "ساعت اجرا مثال 08:44:59.900"
+        );
+
+        countInput = createField(
+                layout,
+                "تعداد اجرا مثال 10"
+        );
+
+        intervalInput = createField(
+                layout,
+                "فاصله میلی‌ثانیه مثال 100"
+        );
+
+        countdownText = new TextView(this);
+        countdownText.setText("زمان باقی‌مانده: --");
+        countdownText.setTextSize(20);
+        countdownText.setPadding(0, 15, 0, 15);
+        layout.addView(countdownText);
 
         Button startButton = new Button(this);
         startButton.setText("شروع زمان‌بندی آزمایشی");
@@ -81,10 +150,28 @@ public class MainActivity extends Activity {
 
         status = new TextView(this);
         status.setText("وضعیت: آماده");
-        status.setTextSize(16);
+        status.setTextSize(17);
+        status.setPadding(0, 15, 0, 15);
         layout.addView(status);
 
-        setContentView(layout);
+        TextView reportTitle = new TextView(this);
+        reportTitle.setText("گزارش اجراها");
+        reportTitle.setTextSize(22);
+        reportTitle.setPadding(0, 20, 0, 10);
+        layout.addView(reportTitle);
+
+        logText = new TextView(this);
+        logText.setTextSize(14);
+        logText.setPadding(5, 10, 5, 10);
+        layout.addView(logText);
+
+        Button clearLogs = new Button(this);
+        clearLogs.setText("پاک‌کردن گزارش‌ها");
+        layout.addView(clearLogs);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(layout);
+        setContentView(scroll);
 
         syncButton.setOnClickListener(v -> syncHttps());
 
@@ -97,20 +184,64 @@ public class MainActivity extends Activity {
 
         startButton.setOnClickListener(v -> startSchedule());
 
-        stopButton.setOnClickListener(v -> {
-            running.set(false);
-            status.setText("زمان‌بندی متوقف شد.");
+        stopButton.setOnClickListener(v -> stopSchedule());
+
+        clearLogs.setOnClickListener(v -> {
+            logs.edit().clear().apply();
+            refreshLogs();
+            status.setText("گزارش‌ها پاک شدند.");
         });
 
+        refreshLogs();
         handler.post(clockUpdater);
     }
 
-    private EditText createField(LinearLayout layout, String hint) {
+    private EditText createField(
+            LinearLayout layout,
+            String hint
+    ) {
         EditText field = new EditText(this);
         field.setHint(hint);
         field.setSingleLine(true);
         layout.addView(field);
         return field;
+    }
+
+    private String currentTime() {
+        return new SimpleDateFormat(
+                "yyyy/MM/dd HH:mm:ss.SSS",
+                Locale.US
+        ).format(new Date());
+    }
+
+    private void addLog(String message) {
+        String entry = currentTime() + " - " + message;
+
+        String old = logs.getString("entries", "");
+
+        String updated = entry + "\n" + old;
+
+        // جلوگیری از بزرگ‌شدن بیش از حد گزارش
+        if (updated.length() > 20000) {
+            updated = updated.substring(0, 20000);
+        }
+
+        logs.edit().putString("entries", updated).apply();
+
+        runOnUiThread(this::refreshLogs);
+    }
+
+    private void refreshLogs() {
+        if (logText == null) {
+            return;
+        }
+
+        String entries = logs.getString(
+                "entries",
+                "هنوز گزارشی ثبت نشده است."
+        );
+
+        logText.setText(entries);
     }
 
     private void showFloatingMarker() {
@@ -119,7 +250,9 @@ public class MainActivity extends Activity {
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName())
             );
+
             startActivity(intent);
+
             status.setText(
                     "مجوز نمایش روی برنامه‌های دیگر را فعال کن."
             );
@@ -127,11 +260,15 @@ public class MainActivity extends Activity {
         }
 
         startService(new Intent(this, OverlayService.class));
+
         status.setText("نشانگر شناور نمایش داده شد.");
+        addLog("نشانگر شناور نمایش داده شد.");
     }
 
     private long getHttpsTime() throws Exception {
-        URL url = new URL("https://www.google.com/generate_204");
+        URL url = new URL(
+                "https://www.google.com/generate_204"
+        );
 
         HttpURLConnection connection =
                 (HttpURLConnection) url.openConnection();
@@ -143,13 +280,15 @@ public class MainActivity extends Activity {
 
         try {
             connection.connect();
+
             long time = connection.getDate();
 
             if (time <= 0) {
-                throw new Exception("زمان سرور دریافت نشد");
+                throw new Exception("زمان سرور دریافت نشد.");
             }
 
             return time;
+
         } finally {
             connection.disconnect();
         }
@@ -166,11 +305,15 @@ public class MainActivity extends Activity {
 
                 for (int i = 0; i < 5; i++) {
                     long t1 = System.currentTimeMillis();
+
                     long serverTime = getHttpsTime();
+
                     long t2 = System.currentTimeMillis();
 
                     long delay = t2 - t1;
-                    long offset = serverTime - (t1 + t2) / 2;
+
+                    long offset =
+                            serverTime - (t1 + t2) / 2;
 
                     if (delay < bestDelay) {
                         bestDelay = delay;
@@ -181,18 +324,25 @@ public class MainActivity extends Activity {
                 final long finalOffset = bestOffset;
                 final long finalDelay = bestDelay;
 
-                ntpOffset = finalOffset;
-                anchorNtp = System.currentTimeMillis() + finalOffset;
+                anchorNtp =
+                        System.currentTimeMillis() + finalOffset;
+
                 anchorElapsed = SystemClock.elapsedRealtime();
+
                 synced = true;
 
                 runOnUiThread(() -> {
                     syncButton.setEnabled(true);
+
                     status.setText(
                             "همگام‌سازی انجام شد.\n" +
-                            "اختلاف تخمینی: " + finalOffset + " میلی‌ثانیه\n" +
-                            "کمترین تأخیر: " + finalDelay + " میلی‌ثانیه"
+                            "اختلاف تخمینی: " +
+                            finalOffset + " میلی‌ثانیه\n" +
+                            "کمترین تأخیر: " +
+                            finalDelay + " میلی‌ثانیه"
                     );
+
+                    addLog("همگام‌سازی ساعت اینترنت انجام شد.");
                 });
 
             } catch (Exception e) {
@@ -200,7 +350,13 @@ public class MainActivity extends Activity {
 
                 runOnUiThread(() -> {
                     syncButton.setEnabled(true);
-                    status.setText("خطای دریافت زمان: " + e.getMessage());
+
+                    status.setText(
+                            "خطای دریافت زمان: " +
+                            e.getMessage()
+                    );
+
+                    addLog("خطا در همگام‌سازی ساعت.");
                 });
             }
         }).start();
@@ -213,10 +369,14 @@ public class MainActivity extends Activity {
 
     private void updateClock() {
         SimpleDateFormat format =
-                new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
+                new SimpleDateFormat(
+                        "HH:mm:ss.SSS",
+                        Locale.US
+                );
 
-        String phoneTime =
-                format.format(new Date(System.currentTimeMillis()));
+        String phoneTime = format.format(
+                new Date(System.currentTimeMillis())
+        );
 
         String internetTime = synced
                 ? format.format(new Date(getNtpNow()))
@@ -228,18 +388,49 @@ public class MainActivity extends Activity {
         );
     }
 
+    private void stopSchedule() {
+        if (running.getAndSet(false)) {
+            handler.removeCallbacks(countdownUpdater);
+
+            if (scheduleThread != null) {
+                scheduleThread.interrupt();
+            }
+
+            countdownText.setText("زمان‌بندی متوقف شد.");
+            status.setText("زمان‌بندی متوقف شد.");
+
+            addLog("زمان‌بندی توسط کاربر متوقف شد.");
+        } else {
+            status.setText("زمان‌بندی فعالی وجود ندارد.");
+        }
+    }
+
     private void startSchedule() {
         if (!synced) {
-            status.setText("ابتدا ساعت اینترنت را همگام کنید.");
+            status.setText(
+                    "ابتدا ساعت اینترنت را همگام کنید."
+            );
+            return;
+        }
+
+        if (running.get()) {
+            status.setText(
+                    "ابتدا زمان‌بندی قبلی را متوقف کنید."
+            );
             return;
         }
 
         try {
-            String[] parts =
-                    timeInput.getText().toString().trim().split("[:.]");
+            String[] parts = timeInput
+                    .getText()
+                    .toString()
+                    .trim()
+                    .split("[:.]");
 
             if (parts.length != 4) {
-                throw new Exception("فرمت ساعت باید HH:mm:ss.SSS باشد.");
+                throw new Exception(
+                        "فرمت ساعت باید HH:mm:ss.SSS باشد."
+                );
             }
 
             int hour = Integer.parseInt(parts[0]);
@@ -247,71 +438,133 @@ public class MainActivity extends Activity {
             int second = Integer.parseInt(parts[2]);
             int milli = Integer.parseInt(parts[3]);
 
-            int count = Integer.parseInt(
+            totalCount = Integer.parseInt(
                     countInput.getText().toString().trim()
             );
 
-            long interval = Long.parseLong(
+            interval = Long.parseLong(
                     intervalInput.getText().toString().trim()
             );
 
-            if (hour > 23 || minute > 59 || second > 59 ||
-                    milli > 999 || count < 1 || interval < 1) {
-                throw new Exception("مقادیر واردشده معتبر نیستند.");
+            if (hour < 0 || hour > 23 ||
+                    minute < 0 || minute > 59 ||
+                    second < 0 || second > 59 ||
+                    milli < 0 || milli > 999 ||
+                    totalCount < 1 ||
+                    interval < 1) {
+
+                throw new Exception(
+                        "مقادیر واردشده معتبر نیستند."
+                );
             }
 
-            java.util.Calendar calendar =
-                    java.util.Calendar.getInstance();
+            Calendar calendar = Calendar.getInstance();
 
             calendar.setTimeInMillis(getNtpNow());
-            calendar.set(java.util.Calendar.HOUR_OF_DAY, hour);
-            calendar.set(java.util.Calendar.MINUTE, minute);
-            calendar.set(java.util.Calendar.SECOND, second);
-            calendar.set(java.util.Calendar.MILLISECOND, milli);
+
+            calendar.set(Calendar.HOUR_OF_DAY, hour);
+            calendar.set(Calendar.MINUTE, minute);
+            calendar.set(Calendar.SECOND, second);
+            calendar.set(Calendar.MILLISECOND, milli);
 
             long target = calendar.getTimeInMillis();
 
             if (target <= getNtpNow()) {
-                calendar.add(java.util.Calendar.DAY_OF_MONTH, 1);
+                calendar.add(Calendar.DAY_OF_MONTH, 1);
                 target = calendar.getTimeInMillis();
             }
 
-            final long targetElapsed =
+            targetElapsed =
                     anchorElapsed + (target - anchorNtp);
 
-            running.set(false);
             running.set(true);
 
-            new Thread(() -> {
-                while (running.get() &&
-                        SystemClock.elapsedRealtime() < targetElapsed) {
-                    SystemClock.sleep(1);
-                }
-
-                if (!running.get()) return;
-
-                for (int i = 1; i <= count && running.get(); i++) {
-                    final int number = i;
-
-                    runOnUiThread(() ->
-                            status.setText(
-                                    "اجرای آزمایشی " + number + " از " + count
-                            )
-                    );
-
-                    if (i < count) {
-                        SystemClock.sleep(interval);
-                    }
-                }
-
-                running.set(false);
-
-                runOnUiThread(() ->
-                        status.setText("زمان‌بندی آزمایشی تمام شد.")
-                );
-            }).start();
+            addLog(
+                    "زمان‌بندی ثبت شد؛ تعداد اجرا: " +
+                    totalCount +
+                    "؛ فاصله: " + interval + " میلی‌ثانیه"
+            );
 
             status.setText("زمان‌بندی آزمایشی ثبت شد.");
+
+            handler.removeCallbacks(countdownUpdater);
+            handler.post(countdownUpdater);
+
+            scheduleThread = new Thread(() -> {
+                try {
+                    while (running.get() &&
+                            SystemClock.elapsedRealtime() < targetElapsed) {
+
+                        SystemClock.sleep(1);
+                    }
+
+                    if (!running.get()) {
+                        return;
+                    }
+
+                    addLog("زمان شروع آزمایش فرا رسید.");
+
+                    for (int i = 1;
+                         i <= totalCount && running.get();
+                         i++) {
+
+                        final int number = i;
+
+                        runOnUiThread(() -> {
+                            status.setText(
+                                    "اجرای آزمایشی " +
+                                    number + " از " + totalCount
+                            );
+
+                            addLog(
+                                    "اجرای آزمایشی شماره " + number
+                            );
+                        });
+
+                        if (i < totalCount) {
+                            SystemClock.sleep(interval);
+                        }
+                    }
+
+                    if (running.get()) {
+                        running.set(false);
+
+                        runOnUiThread(() -> {
+                            handler.removeCallbacks(
+                                    countdownUpdater
+                            );
+
+                            countdownText.setText(
+                                    "زمان‌بندی تمام شد."
+                            );
+
+                            status.setText(
+                                    "زمان‌بندی آزمایشی تمام شد."
+                            );
+
+                            addLog(
+                                    "پایان زمان‌بندی آزمایشی."
+                            );
+                        });
+                    }
+
+                } catch (Exception e) {
+                    if (running.get()) {
+                        running.set(false);
+
+                        runOnUiThread(() -> {
+                            status.setText(
+                                    "خطا در زمان‌بندی: " +
+                                    e.getMessage()
+                            );
+
+                            addLog("خطا در زمان‌بندی آزمایشی.");
+                        });
+                    }
+                }
+            });
+
+            scheduleThread.start();
 
         } catch (Exception e) {
             status.setText("خطا: " + e.getMessage());
@@ -321,7 +574,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         running.set(false);
+
         handler.removeCallbacks(clockUpdater);
+        handler.removeCallbacks(countdownUpdater);
+
+        if (scheduleThread != null) {
+            scheduleThread.interrupt();
+        }
+
         super.onDestroy();
     }
 }
