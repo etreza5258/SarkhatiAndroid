@@ -5,7 +5,10 @@ import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class ClickAccessibilityService : AccessibilityService() {
 
@@ -44,5 +47,52 @@ class ClickAccessibilityService : AccessibilityService() {
                 main.post { onDone(false) }
             }
         }, null)
+
+        if (!dispatched) {
+            main.post { onDone(false) }
+        }
+    }
+
+    /**
+     * اجرای چندین کلیک پشت‌سرهم با فاصله زمانی مشخص (مخصوص ClickEngine)
+     */
+    fun tapMany(x: Float, y: Float, count: Int, intervalMs: Long, onDone: (Int) -> Unit) {
+        Thread {
+            var completed = 0
+            try {
+                for (i in 0 until count) {
+                    if (instance == null) break
+
+                    val latch = CountDownLatch(1)
+                    var success = false
+
+                    // استفاده از متد tap برای هر کلیک تک‌گانه
+                    tap(x, y) { isOk ->
+                        success = isOk
+                        latch.countDown()
+                    }
+
+                    // منتظر ماندن برای پاسخ سیستم به Gesture
+                    latch.await(500, TimeUnit.MILLISECONDS)
+
+                    if (success) {
+                        completed++
+                    } else {
+                        break
+                    }
+
+                    // فاصله بین کلیک‌ها در طول همان سایکل
+                    if (i < count - 1 && intervalMs > 0) {
+                        SystemClock.sleep(intervalMs)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                main.post {
+                    onDone(completed)
+                }
+            }
+        }.start()
     }
 }
