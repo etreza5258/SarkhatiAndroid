@@ -21,11 +21,30 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Build with Gradle
-      run: gradle assembleDebug
+    - name: Find and Build with Gradle
+      run: |
+        # پیدا کردن پوشه‌ای که فایل settings.gradle در آن قرار دارد
+        PROJECT_DIR=$(find . -name "settings.gradle" -exec dirname {} \;)
+        
+        if [ -z "$PROJECT_DIR" ]; then
+          echo "ERROR: Could not find settings.gradle. Please check your folder structure."
+          exit 1
+        fi
+        
+        echo "Project found in: $PROJECT_DIR"
+        cd "$PROJECT_DIR"
+        
+        # اگر فایل gradlew وجود داشت استفاده کن، در غیر این صورت از gradle استفاده کن
+        if [ -f gradlew ]; then
+          chmod +x gradlew
+          ./gradlew assembleDebug
+        else
+          gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
+        # پیدا کردن مسیر APK به صورت هوشمند
+        path: |
+          **/build/outputs/apk/debug/app-debug.apk
