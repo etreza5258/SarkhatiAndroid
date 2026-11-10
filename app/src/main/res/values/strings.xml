@@ -3,5 +3,5 @@
     <string name="app_name">سرخطی</string>
     <string name="accessibility_service_label">سرویس کلیک خودکار</string>
     <string name="accessibility_service_description">این سرویس برای اجرای کلیک‌های خودکار در نقطه انتخاب‌شده استفاده می‌شود.</string>
+    <string name="a11y_description">این سرویس برای اجرای کلیک‌های خودکار در نقطه انتخاب‌شده توسط کاربر استفاده می‌شود.</string>
 </resources>
-
