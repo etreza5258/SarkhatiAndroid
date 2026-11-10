@@ -1,4 +1,4 @@
-name: Android CI/CD (No Wrapper Mode)
+name: Android CI/CD
 
 on:
   push:
@@ -19,21 +19,13 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        # حذف کش گریدل برای جلوگیری از تداخل
+        cache: gradle
 
-    # این مرحله به جای استفاده از gradlew، مستقیماً از دستور gradle استفاده می‌کند
-    - name: Build with Gradle Wrapper alternative
-      run: |
-        # اگر فایل وجود داشت از آن استفاده کن، اگر نه از گریدل نصب شده استفاده کن
-        if [ -f gradlew ]; then
-          chmod +x gradlew
-          ./gradlew assembleDebug
-        else
-          echo "gradlew not found, using system gradle..."
-          gradle assembleDebug
+    - name: Build with Gradle
+      run: gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: debug-apk
-        path: app/
+        path: app/build/outputs/apk/debug/app-debug.apk
