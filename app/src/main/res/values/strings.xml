@@ -1,4 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Auto Clicker</string>
-    <string name="a11y_description">این سرویس برای انجام کلیک‌های خودکار در نقطه‌ای که شما مشخص می‌کنید استفاده می‌شود.</string>
+    <string name="app_name">سرخطی</string>
+    <string name="accessibility_service_label">سرویس کلیک خودکار</string>
+    <string name="accessibility_service_description">این سرویس برای اجرای کلیک‌های خودکار در نقطه انتخاب‌شده استفاده می‌شود.</string>
 </resources>
