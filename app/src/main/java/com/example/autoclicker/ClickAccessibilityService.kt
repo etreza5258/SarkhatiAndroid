@@ -40,3 +40,9 @@ class ClickAccessibilityService : AccessibilityService() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 main.post { onDone(true) }
             }
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                main.post { onDone(false) }
+            }
+        }, null)
+    }
+}
