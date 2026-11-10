@@ -1,38 +1,107 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="20dp">
+    android:layoutDirection="rtl">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Auto Clicker Setup"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="30dp"/>
-
-    <Button
-        android:id="@+id/btnPermission"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="1. Grant Overlay Permission"
-        android:layout_marginBottom="10dp"/>
+        android:orientation="vertical"
+        android:padding="16dp">
 
-    <Button
-        android:id="@+id/btnA11y"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="2. Enable Accessibility Service"
-        android:layout_marginBottom="30dp"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SarkhatiAndroid"
+            android:textSize="20sp"
+            android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Steps:\n1. Click Overlay\n2. Enable Accessibility\n3. Start Clicking"
-        android:gravity="center"
-        android:textColor="#666666"/>
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="آماده"
+            android:textColor="#888888" />
 
-</LinearLayout>
+        <!-- زمان شروع -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <EditText
+                android:id="@+id/etHour"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="ساعت"
+                android:inputType="number" />
+
+            <EditText
+                android:id="@+id/etMinute"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="دقیقه"
+                android:inputType="number" />
+
+            <Button
+                android:id="@+id/btnNow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="همین حالا" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/etCycle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="مدت سایکل (ثانیه)"
+            android:inputType="numberDecimal" />
+
+        <EditText
+            android:id="@+id/etSpeed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="سرعت کلیک (میلی‌ثانیه)"
+            android:inputType="number" />
+
+        <EditText
+            android:id="@+id/etClicks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="تعداد کلیک در هر سایکل"
+            android:inputType="number" />
+
+        <Button
+            android:id="@+id/btnPermission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="فعال‌سازی پنل شناور" />
+
+        <Button
+            android:id="@+id/btnA11y"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="فعال‌سازی سرویس دسترسی" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="لاگ ۲۰ سایکل آخر"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/logContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical" />
+    </LinearLayout>
+</ScrollView>
