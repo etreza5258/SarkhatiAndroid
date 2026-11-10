@@ -21,8 +21,16 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    # این بخش چک می‌کند اگر فایل وجود داشت، اجازه دسترسی بدهد
+    - name: Check and Set Gradle Permission
+      run: |
+        if [ -f gradlew ]; then
+          chmod +x gradlew
+          echo "gradlew found and permission granted."
+        else
+          echo "ERROR: gradlew not found! Please add Gradle Wrapper files to your repository."
+          exit 1
+        fi
 
     - name: Build with Gradle
       run: ./gradlew assembleDebug
